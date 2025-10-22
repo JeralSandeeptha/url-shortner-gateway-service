@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  redirection_service:
+    build:
+      context: ../url-shortner-rediection-service
+      dockerfile: Dockerfile.dev
+    container_name: redirection_service_container
+    ports:
+      - "5003:5003"
+    environment:
+      - PORT=5003
+      - NODE_ENV=development
+      - DATABASE_URL=mongodb://jeral:1234@localhost:27017/url_redirect_db?authSource=admin
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    volumes:
+      - ../url-shortner-rediection-service:/app
+      - /app/node_modules
+  url_generate_service:
+    build:
+      context: ../url-shortner-url-generate-service
+      dockerfile: Dockerfile.dev
+    container_name: url_generate_service_container
+    ports:
+      - "5002:5002"
+    environment:
+      - PORT=5002
+      - NODE_ENV=development
+      - DATABASE_URL=mongodb://jeral:1234@localhost:27017/url_generate_db?authSource=admin
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    volumes:
+      - ../url-shortner-url-generate-service:/app
+      - /app/node_modules
+  user_service:
+    build:
+      context: ../url-shortner-users-service
+      dockerfile: Dockerfile.dev
+    container_name: user_service_container
+    ports:
+      - "5001:5001"
+    environment:
+      - PORT=5001
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://jeral:1234@localhost:5432/users_db
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    volumes:
+      - ../url-shortner-users-service:/app
+      - /app/node_modules
+  gateway_service:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: gateway_service_container
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - NODE_ENV=development
+      - USER_API_URL=http://user_service:5001
+      - URL_GENERATE_API_URL=http://url_generate_service:5002
+      - URL_REDIRECT_API_URL=http://redirection_service:5003
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - user_service
+      - url_generate_service
+      - redirection_service
