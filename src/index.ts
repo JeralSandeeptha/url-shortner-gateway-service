@@ -9,7 +9,10 @@ const app: Application = express();
 const PORT = process.env.PORT || 5000;
 
 // Middlewares
-app.use(cors());
+app.use(cors({
+  origin: "http://localhost:5173", // your frontend URL
+  credentials: true, // allow cookies to be sent
+}));
 
 // If you are using Gateway Service then dont use express.json() / bodyParser
 // Use proxy middlware POST handler
