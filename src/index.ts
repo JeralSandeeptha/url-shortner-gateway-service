@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 5000;
 
 // Middlewares
 app.use(cors({
-  origin: "http://localhost:5173", // your frontend URL
+  origin: "http://localhost:5173", // frontend URL
   credentials: true, // allow cookies to be sent
 }));
 
@@ -26,9 +26,25 @@ app.use('/gateway/users', (req: Request, _res: Response, next: NextFunction) => 
   next();
 });
 
+app.use('/gateway/urls', (req: Request, _res: Response, next: NextFunction) => {
+  // Store the original body for POST/PUT/PATCH requests
+  if (req.body && (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH')) {
+    (req as any).rawBody = JSON.stringify(req.body);
+  }
+  next();
+});
+
+app.use('/gateway/redirects', (req: Request, _res: Response, next: NextFunction) => {
+  // Store the original body for POST/PUT/PATCH requests
+  if (req.body && (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH')) {
+    (req as any).rawBody = JSON.stringify(req.body);
+  }
+  next();
+});
+
 // Proxy configuration
 const userProxyOptions: Options = {
-  target: `${process.env.USER_API_URL}`,
+  target: `${envConfig.USER_API_URL}`,
   changeOrigin: true,
   pathRewrite: {
     '^/gateway/users': '/', // Remove /gateway/users prefix
@@ -49,8 +65,56 @@ const userProxyOptions: Options = {
   }
 };
 
+const urlProxyOptions: Options = {
+  target: `${envConfig.URL_GENERATE_API_URL}`,
+  changeOrigin: true,
+  pathRewrite: {
+    '^/gateway/urls': '/', // Remove /gateway/urls prefix
+  },
+  on: {
+    proxyReq: (proxyReq, req, _res) => {
+      // Handle body for POST requests
+      if ((req as any).rawBody && (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH')) {
+        proxyReq.setHeader('Content-Type', 'application/json');
+        proxyReq.setHeader('Content-Length', Buffer.byteLength((req as any).rawBody));
+        proxyReq.write((req as any).rawBody);
+      }
+    },
+    error: (err, _req, res) => {
+      console.error('Proxy Error:', err);
+      (res as Response).status(500).json({ error: 'Proxy error' });
+    }
+  }
+};
+
+const redirectProxyOptions: Options = {
+  target: `${envConfig.URL_REDIRECT_API_URL}`,
+  changeOrigin: true,
+  pathRewrite: {
+    '^/gateway/redirects': '/', // Remove /gateway/redirects prefix
+  },
+  on: {
+    proxyReq: (proxyReq, req, _res) => {
+      // Handle body for POST requests
+      if ((req as any).rawBody && (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH')) {
+        proxyReq.setHeader('Content-Type', 'application/json');
+        proxyReq.setHeader('Content-Length', Buffer.byteLength((req as any).rawBody));
+        proxyReq.write((req as any).rawBody);
+      }
+    },
+    error: (err, _req, res) => {
+      console.error('Proxy Error:', err);
+      (res as Response).status(500).json({ error: 'Proxy error' });
+    }
+  }
+};
+
 // Proxy API requests - MOVE THIS BEFORE YOUR MAIN ROUTE
 app.use('/gateway/users', createProxyMiddleware(userProxyOptions));
+
+app.use('/gateway/urls', createProxyMiddleware(urlProxyOptions));
+
+app.use('/gateway/redirects', createProxyMiddleware(redirectProxyOptions));
 
 // Import and use your routes - AFTER proxy middleware
 import appRoute from "./api/routes/app.route";
