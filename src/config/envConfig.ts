@@ -9,5 +9,6 @@ export const envConfig = {
     USER_API_URL: process.env.USER_API_URL,
     URL_REDIRECT_API_URL: process.env.URL_REDIRECT_API_URL,
     URL_GENERATE_API_URL: process.env.URL_GENERATE_API_URL,
+    KEYCLOAK_API_URL: process.env.KEYCLOAK_API_URL,
     BASE_URL: process.env.BASE_URL,
 }

@@ -42,6 +42,14 @@ app.use('/gateway/redirects', (req: Request, _res: Response, next: NextFunction)
   next();
 });
 
+app.use('/gateway/auth', (req: Request, _res: Response, next: NextFunction) => {
+  // Store the original body for POST/PUT/PATCH requests
+  if (req.body && (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH')) {
+    (req as any).rawBody = JSON.stringify(req.body);
+  }
+  next();
+});
+
 // Proxy configuration
 const userProxyOptions: Options = {
   target: `${envConfig.USER_API_URL}`,
@@ -109,12 +117,36 @@ const redirectProxyOptions: Options = {
   }
 };
 
+const authProxyOptions: Options = {
+  target: `${envConfig.KEYCLOAK_API_URL}`,
+  changeOrigin: true,
+  pathRewrite: {
+    '^/gateway/auth': '/', // Remove /gateway/auth prefix
+  },
+  on: {
+    proxyReq: (proxyReq, req, _res) => {
+      // Handle body for POST requests
+      if ((req as any).rawBody && (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH')) {
+        proxyReq.setHeader('Content-Type', 'application/json');
+        proxyReq.setHeader('Content-Length', Buffer.byteLength((req as any).rawBody));
+        proxyReq.write((req as any).rawBody);
+      }
+    },
+    error: (err, _req, res) => {
+      console.error('Proxy Error:', err);
+      (res as Response).status(500).json({ error: 'Proxy error' });
+    }
+  }
+};
+
 // Proxy API requests - MOVE THIS BEFORE YOUR MAIN ROUTE
 app.use('/gateway/users', createProxyMiddleware(userProxyOptions));
 
 app.use('/gateway/urls', createProxyMiddleware(urlProxyOptions));
 
 app.use('/gateway/redirects', createProxyMiddleware(redirectProxyOptions));
+
+app.use('/gateway/auth', createProxyMiddleware(authProxyOptions));
 
 // Import and use your routes - AFTER proxy middleware
 import appRoute from "./api/routes/app.route";
@@ -131,6 +163,7 @@ app.listen(PORT, () => {
     logger.info(`Gateway Service is running at http://localhost:${PORT} `);
     logger.info(`Users Service is running at ${envConfig.USER_API_URL}`);
     logger.info(`URL Generate Service is running at ${envConfig.URL_GENERATE_API_URL}`);
+    logger.info(`Keycloak Service is running at ${envConfig.KEYCLOAK_API_URL}`);
     logger.info(`Redirect Service is running at ${envConfig.URL_REDIRECT_API_URL}`);
 });
 
